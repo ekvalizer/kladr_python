@@ -5,6 +5,7 @@ from dbfread import DBF
 import psycopg2
 import chardet
 import time
+from operator import itemgetter
 
 URL_KLADR = 'https://www.gnivc.ru/html/gnivcsoft/KLADR/Base.7z'
 
@@ -39,40 +40,45 @@ def q_objects(title, code, ocatd, index, type_id, parent_id, deleted):
             .format(title, code, ocatd, index, type_id, parent_id, deleted))
 
 
-def update_table(cur, dbf_path):
+def update_objects_table(cur, dbf_path):
+    table = DBF(filename=dbf_path, encoding='cp866', load=True)
+    records = table.records
+    sorted(records, key=lambda x: x['CODE'])
+    for record in table:
+        cur.execute(q_types(record['SOCR'],record['NAME'], record['STATUS'], record['CODE']))
+
+
+def update_types(cur, dbf_path):
     table = DBF(filename=dbf_path, encoding='cp866')
-    if "KLADR.DBF" in dbf_path:
-        for record in table:
-            cur.execute(q_types(record['SOCR'],record['NAME'], record['STATUS'], record['CODE']))
-    elif "STREET.DBF" in dbf_path:
-        for record in table:
-            cur.execute(q_types(record['SOCR'],record['NAME'], 5, record['CODE']))
-    elif "DOMA.DBF" in dbf_path:
-        #add splitting record into array splitting the NAME attribute
-        for record in table:
-            cur.execute(q_types(record['SOCR'],record['NAME'], 6, record['CODE']))
+    for record in table:
+        cur.execute(q_types(record['SCNAME'], record['SOCRNAME'], record['LEVEL'], record['KOD_T_ST']))
 
 
 def main(url, hostname, db, user, pswd, port, path):
     arch_path = path + '/Base.7z'
-    download_file(url, arch_path)
-    #arch_path_dir = arch_path[:arch_path.rindex(os.sep)-1]
+    # download_file(url, arch_path)
+    # arch_path_dir = arch_path[:arch_path.rindex(os.sep)]
     arch_path_dir = path + '/Base'
-    os.system( '7za e %s -o%s' % (arch_path, arch_path_dir))
+
+    # os.system( '7za e %s -o%s' % (arch_path, arch_path_dir))
     conn = psycopg2.connect(host=hostname,dbname=db, user=user, password=pswd, port=port)
     cur = conn.cursor()
 
-    print('updating wt_kladr_types with KLADR...')
-    update_table(cur, arch_path_dir + '/KLADR.DBF')
-    print('update KLADR completed.')
+    print('updating wt_kladr_types from SOCRBASE...')
+    update_types(cur, arch_path_dir + '/SOCRBASE.DBF')
+    print('update wt_kladr_types completed.')
 
-    print('updating wt_kladr_types with STREET...')
-    update_table(cur, arch_path_dir + '/STREET.DBF')
-    print('update STREET completed.')
-
-    #print('updating wt_kladr_types with DOMA...')
-    #update_kladr(cur, arch_path_dir + '/DOMA.DBF')
-    #print('update DOMA completed.')
+    # print('updating wt_kladr_types from KLADR...')
+    # update_objects_table(cur, arch_path_dir + '/KLADR.DBF')
+    # print('update KLADR completed.')
+    #
+    # print('updating wt_kladr_types from STREET...')
+    # update_objects_table(cur, arch_path_dir + '/STREET.DBF')
+    # print('update STREET completed.')
+    #
+    # print('updating wt_kladr_types from DOMA...')
+    # update_objects_table(cur, arch_path_dir + '/DOMA.DBF')
+    # print('update DOMA completed.')
 
     conn.commit()
     cur.close()
