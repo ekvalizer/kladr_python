@@ -41,7 +41,7 @@ def q_objects(title, short_title, code, ocatd, index, parent_id, deleted, obj_le
 
 
 def get_kladr_level(code):
-    if code[-5:-2] != '000':
+    if code[8:11] != '000':
         lvl = 4
     elif code[5:8] != '000':
         lvl = 3
@@ -52,24 +52,45 @@ def get_kladr_level(code):
     return lvl
 
 
-def update_kladr(conn, cur, dbf_path):
+def update_objects(conn, cur, dbf_path, is_kladr):
     table = DBF(filename=dbf_path, encoding='cp866')
     #records = table.records
     #sorted(records, key=lambda x: x['CODE'])
-    # for record in table:
-    #     cur.execute(q_objects(record['NAME'], record['SOCR'], record['CODE'], record['OCATD'], record['INDEX'],
-    #                           '1', 'false', get_kladr_level(record['CODE'])))
-    for record in table:
-        cur.execute("""UPDATE wt_kladr_objects
-            SET parent_id = '{}'
-            where kladr_code = '{}';
-            """.format(get_parent_id(cur, record['CODE']), record['CODE']))
+    if is_kladr:
+        for record in table:
+            cur.execute(q_objects(record['NAME'], record['SOCR'], record['CODE'], record['OCATD'], record['INDEX'],
+                                  '1', 'false', get_kladr_level(record['CODE'])))
+    else:
+        for record in table:
+            cur.execute(q_objects(record['NAME'], record['SOCR'], record['CODE'], record['OCATD'], record['INDEX'],
+                                  '1', 'false', '5'))
+    if is_kladr:
+        for record in table:
+            cur.execute("""UPDATE wt_kladr_objects
+                SET parent_id = '{}'
+                where kladr_code = '{}';
+                """.format(get_parent_id_kladr(cur, record['CODE']), record['CODE']))
+    else:
+        for record in table:
+            cur.execute("""UPDATE wt_kladr_objects
+                SET parent_id = '{}'
+                where kladr_code = '{}';
+                """.format(get_parent_id_street(cur, record['CODE']), record['CODE']))
 
 
+def get_parent_id_street(cur, code):
+    digits_num = len(code)-2
+    p_code = code[:11] + '__'
+    cur.execute("""SELECT id from wt_kladr_objects
+    WHERE kladr_code LIKE '{}';
+    """.format(p_code))
+    id = cur.fetchone()
+    if id is None:
+        return get_parent_id_kladr(cur, code[:11] + code[-2:])
+    return id[0]
 
-
-def get_parent_id(cur, code):
-    digits_num = 11
+def get_parent_id_kladr(cur, code):
+    digits_num = len(code)-2
     lvl = get_kladr_level(code)
     if lvl == 4:
         r = 8
@@ -97,6 +118,8 @@ def get_parent_id(cur, code):
             p_code = code[:2] + '0'*(digits_num-2) + '__'
             cur.execute(q.format(p_code))
             id = cur.fetchone()
+            if id is None:
+                print('code: ' + code + 'p_code: ' + p_code)
     return id[0]
 
 
@@ -120,13 +143,13 @@ def main(url, hostname, db, user, pswd, port, path):
     update_types(cur, arch_path_dir + '/SOCRBASE.DBF')
     print('update wt_kladr_types completed.')
 
-    print('updating wt_kladr_types from KLADR...')
-    update_kladr(conn, cur, arch_path_dir + '/KLADR.DBF')
-    print('update KLADR completed.')
-    #
-    # print('updating wt_kladr_types from STREET...')
-    # update_objects_table(cur, arch_path_dir + '/STREET.DBF')
-    # print('update STREET completed.')
+    # print('updating wt_kladr_types from KLADR...')
+    # update_objects(conn, cur, arch_path_dir + '/KLADR.DBF', True)
+    # print('update KLADR completed.')
+
+    print('updating wt_kladr_types from STREET...')
+    update_objects(conn, cur, arch_path_dir + '/STREET.DBF', False)
+    print('update STREET completed.')
     #
     # print('updating wt_kladr_types from DOMA...')
     # update_objects_table(cur, arch_path_dir + '/DOMA.DBF')
