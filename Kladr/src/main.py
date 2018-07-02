@@ -1,6 +1,7 @@
 import urllib.request
 import zipfile
 import os
+import lzma
 from dbfread import DBF
 import psycopg2
 import chardet
@@ -164,7 +165,7 @@ def update_obects(cur, records, lvl, types):
                     continue
                 for house_idx in range (0, len(houses)):
                     code = records[i]['CODE'] + str(house_idx) if house_idx>9 else '0'+str(house_idx)
-                    in_b = is_in_base(code, same_lvl_records_from_base_dict, True)
+                    in_b = is_in_base_dict(code, same_lvl_records_from_base_dict, True)
 
                     if (status == '99' or status == '51') and in_b:
                         q_up_deleted += "UPDATE wt_kladr_objects SET deleted = true where kladr_code = '{}'; ".format(code)
@@ -184,7 +185,7 @@ def update_obects(cur, records, lvl, types):
             for i in range(rec_idx, to):
                 start = time.time()
                 status = records[i]['CODE'][-2:]
-                in_b = is_in_base(records[i]['CODE'], same_lvl_records_from_base_dict, False)
+                in_b = is_in_base_dict(records[i]['CODE'], same_lvl_records_from_base_dict, False)
                 in_base_time = time.time()-start
                 if (status == '99' or status == '51') and in_b:
                     q_up_deleted += "UPDATE wt_kladr_objects SET deleted = true where kladr_code = '{}'; ".format(records[i]['CODE'])
@@ -321,13 +322,13 @@ def main(url, hostname, db, user, pswd, port, path):
     cur.execute('SELECT id, short_title, level from wt_kladr_types;')
     types = cur.fetchall()
 
-    # print('updating wt_kladr_objects from KLADR...')
-    # update_kladr(cur, arch_path_dir + '/KLADR.DBF', types)
-    # print('update KLADR completed.')
+    print('updating wt_kladr_objects from KLADR...')
+    update_kladr(cur, arch_path_dir + '/KLADR.DBF', types)
+    print('update KLADR completed.')
 
-    print('updating wt_kladr_objects from STREET...')
-    update_street(cur, arch_path_dir + '/STREET.DBF', types)
-    print('update STREET completed.')
+    # print('updating wt_kladr_objects from STREET...')
+    # update_street(cur, arch_path_dir + '/STREET.DBF', types)
+    # print('update STREET completed.')
     #
     # print('updating wt_kladr_objects from DOMA...')
     # update_objects_table(cur, arch_path_dir + '/DOMA.DBF')
