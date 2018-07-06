@@ -1,0 +1,7 @@
+URL: https://www.gnivc.ru/html/gnivcsoft/KLADR/Base.7z
+hostname: localhost
+port: 5432
+Database login: postgres
+Database password: postgres
+Database name: kladr
+Types: с,пгт,погост,снт
