@@ -17,10 +17,8 @@ def download_file(url, dest):
     print('downloaded!')
 
 
-def unzip_file(path_to_zip_file, directory_to_extract_to):
-    zip_ref = zipfile.ZipFile(path_to_zip_file, 'r')
-    zip_ref.extractall(directory_to_extract_to)
-    zip_ref.close()
+# def unzip_file():
+    # with lzma.open('Base.7z') as f:
 
 
 def get_object_level(code):
@@ -84,7 +82,7 @@ def is_in_base_dict(kladr_code, records_from_base, is_lvl_6):
         return False
 
 
-def update_kladr(cur, dbf_path, types):
+def update_kladr(cur, dbf_path, types, up_set):
     table = DBF(filename=dbf_path, encoding='cp866')
 
     list_lvl_1 = list(); list_lvl_2 = list(); list_lvl_3 = list(); list_lvl_4 = list()
@@ -100,31 +98,38 @@ def update_kladr(cur, dbf_path, types):
             list_lvl_4.append(record)
 
     start = time.time()
-    update_obects(cur, list_lvl_1, 1, types)
+    update_obects(cur, list_lvl_1, 1, types, up_set)
     end = time.time()
     print('time elapsed for lvl 1: {} secs, size of list is {} : '.format((end-start), len(list_lvl_1)))
 
     start = time.time()
-    update_obects(cur, list_lvl_2, 2, types)
+    update_obects(cur, list_lvl_2, 2, types, up_set)
     end = time.time()
     print('time elapsed for lvl 2: {} secs, size of list is {} : '.format((end-start), len(list_lvl_2)))
 
     start = time.time()
-    update_obects(cur, list_lvl_3, 3, types)
+    update_obects(cur, list_lvl_3, 3, types, up_set)
     end = time.time()
     print('time elapsed for lvl 3: {} secs, size of list is {} : '.format((end-start), len(list_lvl_3)))
 
     start = time.time()
-    update_obects(cur, list_lvl_4, 4, types)
+    update_obects(cur, list_lvl_4, 4, types, up_set)
     end = time.time()
     print('time elapsed for lvl 4: {} secs, size of list is {} : '.format((end-start), len(list_lvl_4)))
 
-def update_street(cur, dbf_path, types):
+def update_street(cur, dbf_path, types, up_set):
     table = DBF(filename=dbf_path, encoding='cp866', load=True)
     records = table.records
-    update_obects(cur, records, 5, types)
+    update_obects(cur, records, 5, types, up_set)
 
-def update_obects(cur, records, lvl, types):
+
+def update_doma(cur, dbf_path, types, up_set):
+    table = DBF(filename=dbf_path, encoding='cp866', load=True)
+    records = table.records
+    update_obects(cur, records, 6, types, up_set)
+
+
+def update_obects(cur, records, lvl, kladr_types, update_set):
     sorted(records, key=lambda x: x['CODE'])
     r_len = len(records)
     rec_idx = 0
@@ -158,7 +163,10 @@ def update_obects(cur, records, lvl, types):
         same_lvl_records_from_base = cur.fetchall() #CHANGE TO DICT FOR FAST SEARCH
         same_lvl_records_from_base_dict = list_to_dict(same_lvl_records_from_base)
         if lvl == 6:
+            cur.execute("update wt_kladr_objects SET deleted = true where char_length(kladr_code) > 17;")
             for i in range(rec_idx, to):
+                if records[i]['SOCR'] not in update_set:
+                    continue
                 houses = records[i]['NAME'].split(',')
                 status = records[i]['CODE'][-4:-2]
                 if status != '99' or status != '51' or status != '00':
@@ -174,16 +182,18 @@ def update_obects(cur, records, lvl, types):
                             q_up += """UPDATE wt_kladr_objects SET title = '{}', kladr_ocatd = '{}',
                                         kladr_index = '{}', type_id = '{}', parent_id = '{}', deleted = false
                                     WHERE kladr_code = '{}'; """.format(records[i]['NAME'], records[i]['OCATD'],
-                                    records[i]['INDEX'],get_type_id(types, records[i]['SOCR'], records[i]['CODE']),
-                                    get_parent_id(code, lvl, parents), code )
+                                                                        records[i]['INDEX'], get_type_id(kladr_types, records[i]['SOCR'], records[i]['CODE']),
+                                                                        get_parent_id(code, lvl, parents), code)
                         else: #если кортежа в базе нет, то вставляю его
                             q_ins += " (DEFAULT, '{}', '{}', '{}', '{}', '{}', '{}', '{}'), "\
                                     .format(records[i]['NAME'], records[i]['CODE'], records[i]['OCATD'], records[i]['INDEX'],
-                                        get_type_id(types,records[i]['SOCR'], lvl),
-                                        get_parent_id(code, lvl, parents), 'false')
+                                            get_type_id(kladr_types, records[i]['SOCR'], lvl),
+                                            get_parent_id(code, lvl, parents), 'false')
         else:
             for i in range(rec_idx, to):
                 start = time.time()
+                if records[i]['SOCR'] not in update_set:
+                    continue
                 status = records[i]['CODE'][-2:]
                 in_b = is_in_base_dict(records[i]['CODE'], same_lvl_records_from_base_dict, False)
                 in_base_time = time.time()-start
@@ -194,13 +204,13 @@ def update_obects(cur, records, lvl, types):
                         q_up += """UPDATE wt_kladr_objects SET title = '{}', kladr_code = '{}', kladr_ocatd = '{}',
                                     kladr_index = '{}', type_id = '{}', parent_id = '{}', deleted = 'false'
                                 WHERE kladr_code = '{}'; """.format(records[i]['NAME'], records[i]['CODE'],
-                        records[i]['OCATD'], records[i]['INDEX'],get_type_id(types, records[i]['SOCR'], records[i]['CODE']),
-                         get_parent_id(records[i]['CODE'], lvl, parents), records[i]['CODE'], records[i]['CODE'])
+                                                                    records[i]['OCATD'], records[i]['INDEX'], get_type_id(kladr_types, records[i]['SOCR'], records[i]['CODE']),
+                                                                    get_parent_id(records[i]['CODE'], lvl, parents), records[i]['CODE'], records[i]['CODE'])
                     else: #если кортежа в базе нет, то вставляю его
                         q_ins += " (DEFAULT, '{}', '{}', '{}', '{}', '{}', '{}', '{}'), "\
                                 .format(records[i]['NAME'], records[i]['CODE'], records[i]['OCATD'], records[i]['INDEX'],
-                                    get_type_id(types,records[i]['SOCR'] , lvl),
-                                    get_parent_id(records[i]['CODE'], lvl, parents), 'false')
+                                        get_type_id(kladr_types, records[i]['SOCR'], lvl),
+                                        get_parent_id(records[i]['CODE'], lvl, parents), 'false')
                 if_time = time.time() - start - in_base_time
                 time_e = time.time() - start
                 print('Record {} completed. in_base_time {}, get_parent time {}'.format(i, in_base_time/time_e, if_time/time_e))
@@ -304,7 +314,7 @@ def update_types(cur, dbf_path):
 
 
 
-def main(url, hostname, db, user, pswd, port, path):
+def main(url, hostname, db, user, pswd, port, path, up_types_set):
     arch_path = path + '/Base.7z'
     # download_file(url, arch_path)
     # arch_path_dir = arch_path[:arch_path.rindex(os.sep)]
@@ -323,61 +333,39 @@ def main(url, hostname, db, user, pswd, port, path):
     types = cur.fetchall()
 
     print('updating wt_kladr_objects from KLADR...')
-    update_kladr(cur, arch_path_dir + '/KLADR.DBF', types)
+    update_kladr(cur, arch_path_dir + '/KLADR.DBF', types, up_types_set)
     print('update KLADR completed.')
 
-    # print('updating wt_kladr_objects from STREET...')
-    # update_street(cur, arch_path_dir + '/STREET.DBF', types)
-    # print('update STREET completed.')
-    #
-    # print('updating wt_kladr_objects from DOMA...')
-    # update_objects_table(cur, arch_path_dir + '/DOMA.DBF')
-    # print('update DOMA completed.')
+    print('updating wt_kladr_objects from STREET...')
+    update_street(cur, arch_path_dir + '/STREET.DBF', types, up_types_set)
+    print('update STREET completed.')
+
+    print('updating wt_kladr_objects from DOMA...')
+    update_doma(cur, arch_path_dir + '/DOMA.DBF', types, up_types_set)
+    print('update DOMA completed.')
 
     conn.commit()
     cur.close()
     conn.close()
 
-def menu():
-    print("Enter archive URL[%s]: " % URL_KLADR)
-    url = str(input())
-    if not url: url = URL_KLADR
-
-    print("Enter hostname[localhost]:")
-    hostname = str(input())
-    if not hostname: hostname = 'localhost'
-
-    print("Enter port[5432]: ")
-    port = str(input())
-    if not port: port = '5432'
-
-    print("Enter db user login[postgres]: ")
-    user = str(input())
-    if not user: user = 'postgres'
-
-    print("Enter db user password[postgres]: ")
-    password = str(input())
-    if not password: password = 'postgres'
-
-    print('Enter db name[kladr]: ')
-    db_name = str(input())
-    if not db_name: db_name = 'kladr'
-
-    #which types should i import into database??
-    cwd = os.getcwd()
-    print("Enter directory path to store and unpack archive[%s]: " % cwd)
-    path = str(input())
-    if not path: path = str(cwd)
-
-    start = time.time()
-    main(url, hostname, db_name, user, password, port, path)
-    end = time.time()
-    print('time elapsed: ', (end-start))
 
 if __name__ == '__main__':
-    #arr = open('/Users/olegsergeev/PycharmProjects/Kladr/test_files/Base/KLADR.DBF', "rb").read()
-    #print(chardet.detect(arr))
+    with open('config.txt') as f:
+        lines = f.readlines()
+        for i in range(0, 7):
+            lines[i] = lines[i][lines[i].index(':')+1:].strip()
+        url = lines[0]
+        hostname = lines[1]
+        port = lines[2]
+        user = lines[3]
+        password = lines[4]
+        db_name = lines[5]
+        types = lines[6].split(',')
+    path = os.getcwd()
 
-    #main('localhost', 'kladr', 'postgres', 'postgres', '5432')
-    menu()
+    up_set = set(types)
+    start = time.time()
+    main(url, hostname, db_name, user, password, port, path, up_set)
+    end = time.time()
+    print('time elapsed: ', (end-start))
 
