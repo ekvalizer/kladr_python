@@ -131,6 +131,8 @@ def update_doma(cur, dbf_path, types, up_set):
 
 def update_obects(cur, records, lvl, kladr_types, update_set):
     sorted(records, key=lambda x: x['CODE'])
+    if lvl == 6:
+        cur.execute("update wt_kladr_objects SET deleted = true where char_length(kladr_code) > 17;")
     r_len = len(records)
     rec_idx = 0
     parents = list(); parents_dict = dict()
@@ -139,7 +141,6 @@ def update_obects(cur, records, lvl, kladr_types, update_set):
         parents = cur.fetchall()
         for rec in parents:
             parents_dict[rec[1]] = rec[0]
-
     while rec_idx < r_len-1:
         if lvl <= 4:
             if lvl == 4:
@@ -163,16 +164,13 @@ def update_obects(cur, records, lvl, kladr_types, update_set):
         same_lvl_records_from_base = cur.fetchall() #CHANGE TO DICT FOR FAST SEARCH
         same_lvl_records_from_base_dict = list_to_dict(same_lvl_records_from_base)
         if lvl == 6:
-            cur.execute("update wt_kladr_objects SET deleted = true where char_length(kladr_code) > 17;")
             for i in range(rec_idx, to):
                 if records[i]['SOCR'] not in update_set:
                     continue
                 houses = records[i]['NAME'].split(',')
-                status = records[i]['CODE'][-4:-2]
-                if status != '99' or status != '51' or status != '00':
-                    continue
+                status = records[i]['CODE'][-2:]
                 for house_idx in range (0, len(houses)):
-                    code = records[i]['CODE'] + str(house_idx) if house_idx>9 else '0'+str(house_idx)
+                    code = records[i]['CODE'] + (str(house_idx) if house_idx>9 else '0'+str(house_idx))
                     in_b = is_in_base_dict(code, same_lvl_records_from_base_dict, True)
 
                     if (status == '99' or status == '51') and in_b:
@@ -181,14 +179,16 @@ def update_obects(cur, records, lvl, kladr_types, update_set):
                         if in_b: #если в базе есть кортеж, то обновляю его
                             q_up += """UPDATE wt_kladr_objects SET title = '{}', kladr_ocatd = '{}',
                                         kladr_index = '{}', type_id = '{}', parent_id = '{}', deleted = false
-                                    WHERE kladr_code = '{}'; """.format(records[i]['NAME'], records[i]['OCATD'],
-                                                                        records[i]['INDEX'], get_type_id(kladr_types, records[i]['SOCR'], records[i]['CODE']),
+                                    WHERE kladr_code = '{}'; """.format(houses[house_idx], records[i]['OCATD'],
+                                                                        records[i]['INDEX'], get_type_id(kladr_types, records[i]['SOCR'], lvl),
                                                                         get_parent_id(code, lvl, parents), code)
                         else: #если кортежа в базе нет, то вставляю его
                             q_ins += " (DEFAULT, '{}', '{}', '{}', '{}', '{}', '{}', '{}'), "\
-                                    .format(records[i]['NAME'], records[i]['CODE'], records[i]['OCATD'], records[i]['INDEX'],
+                                    .format(houses[house_idx], code, records[i]['OCATD'], records[i]['INDEX'],
                                             get_type_id(kladr_types, records[i]['SOCR'], lvl),
                                             get_parent_id(code, lvl, parents), 'false')
+                    print("house {} completed. ".format(code))
+                print('record {} completed'.format(i))
         else:
             for i in range(rec_idx, to):
                 start = time.time()
@@ -204,7 +204,7 @@ def update_obects(cur, records, lvl, kladr_types, update_set):
                         q_up += """UPDATE wt_kladr_objects SET title = '{}', kladr_code = '{}', kladr_ocatd = '{}',
                                     kladr_index = '{}', type_id = '{}', parent_id = '{}', deleted = 'false'
                                 WHERE kladr_code = '{}'; """.format(records[i]['NAME'], records[i]['CODE'],
-                                                                    records[i]['OCATD'], records[i]['INDEX'], get_type_id(kladr_types, records[i]['SOCR'], records[i]['CODE']),
+                                                                    records[i]['OCATD'], records[i]['INDEX'], get_type_id(kladr_types, records[i]['SOCR'], lvl),
                                                                     get_parent_id(records[i]['CODE'], lvl, parents), records[i]['CODE'], records[i]['CODE'])
                     else: #если кортежа в базе нет, то вставляю его
                         q_ins += " (DEFAULT, '{}', '{}', '{}', '{}', '{}', '{}', '{}'), "\
