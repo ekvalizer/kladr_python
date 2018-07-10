@@ -133,6 +133,8 @@ def update_obects(cur, records, lvl, kladr_types, update_set):
     sorted(records, key=lambda x: x['CODE'])
     if lvl == 6:
         cur.execute("update wt_kladr_objects SET deleted = true where char_length(kladr_code) > 17;")
+        if 'ДОМ' not in update_set:
+            return
     r_len = len(records)
     rec_idx = 0
     parents = list(); parents_dict = dict()
@@ -165,38 +167,32 @@ def update_obects(cur, records, lvl, kladr_types, update_set):
         same_lvl_records_from_base_dict = list_to_dict(same_lvl_records_from_base)
         if lvl == 6:
             for i in range(rec_idx, to):
-                if records[i]['SOCR'] not in update_set:
-                    continue
                 houses = records[i]['NAME'].split(',')
-                status = records[i]['CODE'][-2:]
                 for house_idx in range (0, len(houses)):
                     code = records[i]['CODE'] + (str(house_idx) if house_idx>9 else '0'+str(house_idx))
                     in_b = is_in_base_dict(code, same_lvl_records_from_base_dict, True)
 
-                    if (status == '99' or status == '51') and in_b:
-                        q_up_deleted += "UPDATE wt_kladr_objects SET deleted = true where kladr_code = '{}'; ".format(code)
-                    elif status == '00':
-                        if in_b: #если в базе есть кортеж, то обновляю его
-                            q_up += """UPDATE wt_kladr_objects SET title = '{}', kladr_ocatd = '{}',
-                                        kladr_index = '{}', type_id = '{}', parent_id = '{}', deleted = false
-                                    WHERE kladr_code = '{}'; """.format(houses[house_idx], records[i]['OCATD'],
-                                                                        records[i]['INDEX'], get_type_id(kladr_types, records[i]['SOCR'], lvl),
-                                                                        get_parent_id(code, lvl, parents), code)
-                        else: #если кортежа в базе нет, то вставляю его
-                            q_ins += " (DEFAULT, '{}', '{}', '{}', '{}', '{}', '{}', '{}'), "\
-                                    .format(houses[house_idx], code, records[i]['OCATD'], records[i]['INDEX'],
-                                            get_type_id(kladr_types, records[i]['SOCR'], lvl),
-                                            get_parent_id(code, lvl, parents), 'false')
+                    if in_b: #если в базе есть кортеж, то обновляю его
+                        q_up += """UPDATE wt_kladr_objects SET title = '{}', kladr_ocatd = '{}',
+                                    kladr_index = '{}', type_id = '{}', parent_id = '{}', deleted = false
+                                WHERE kladr_code = '{}'; """.format(houses[house_idx], records[i]['OCATD'],
+                                                                    records[i]['INDEX'], get_type_id(kladr_types, records[i]['SOCR'], lvl),
+                                                                    get_parent_id(code, lvl, parents), code)
+                    else: #если кортежа в базе нет, то вставляю его
+                        q_ins += " (DEFAULT, '{}', '{}', '{}', '{}', '{}', '{}', '{}'), "\
+                                .format(houses[house_idx], code, records[i]['OCATD'], records[i]['INDEX'],
+                                        get_type_id(kladr_types, records[i]['SOCR'], lvl),
+                                        get_parent_id(code, lvl, parents), 'false')
                     print("house {} completed. ".format(code))
                 print('record {} completed'.format(i))
         else:
             for i in range(rec_idx, to):
-                start = time.time()
+                # start = time.time()
                 if records[i]['SOCR'] not in update_set:
                     continue
                 status = records[i]['CODE'][-2:]
                 in_b = is_in_base_dict(records[i]['CODE'], same_lvl_records_from_base_dict, False)
-                in_base_time = time.time()-start
+                # in_base_time = time.time()-start
                 if (status == '99' or status == '51') and in_b:
                     q_up_deleted += "UPDATE wt_kladr_objects SET deleted = true where kladr_code = '{}'; ".format(records[i]['CODE'])
                 elif status == '00':
@@ -211,9 +207,9 @@ def update_obects(cur, records, lvl, kladr_types, update_set):
                                 .format(records[i]['NAME'], records[i]['CODE'], records[i]['OCATD'], records[i]['INDEX'],
                                         get_type_id(kladr_types, records[i]['SOCR'], lvl),
                                         get_parent_id(records[i]['CODE'], lvl, parents), 'false')
-                if_time = time.time() - start - in_base_time
-                time_e = time.time() - start
-                print('Record {} completed. in_base_time {}, get_parent time {}'.format(i, in_base_time/time_e, if_time/time_e))
+                # if_time = time.time() - start - in_base_time
+                # time_e = time.time() - start
+                # print('Record {} completed. in_base_time {}, get_parent time {}'.format(i, in_base_time/time_e, if_time/time_e))
         if len(q_up) > 0: cur.execute(q_up) #00, есть в базе
         if len(q_up_deleted) > 0: cur.execute(q_up_deleted) #51 или 99, есть в базе
         if q_ins[-2] == ',' :
@@ -332,13 +328,17 @@ def main(url, hostname, db, user, pswd, port, path, up_types_set):
     cur.execute('SELECT id, short_title, level from wt_kladr_types;')
     types = cur.fetchall()
 
-    print('updating wt_kladr_objects from KLADR...')
-    update_kladr(cur, arch_path_dir + '/KLADR.DBF', types, up_types_set)
-    print('update KLADR completed.')
+    cur.execute('select id from wt_kladr_objects where id = 1')
+    if len(cur.fetchall()) == 0:
+        cur.execute("insert into wt_kladr_objects values (1, 'Россия', 0, 0, 0, null, null, false)")
 
-    print('updating wt_kladr_objects from STREET...')
-    update_street(cur, arch_path_dir + '/STREET.DBF', types, up_types_set)
-    print('update STREET completed.')
+    # print('updating wt_kladr_objects from KLADR...')
+    # update_kladr(cur, arch_path_dir + '/KLADR.DBF', types, up_types_set)
+    # print('update KLADR completed.')
+    #
+    # print('updating wt_kladr_objects from STREET...')
+    # update_street(cur, arch_path_dir + '/STREET.DBF', types, up_types_set)
+    # print('update STREET completed.')
 
     print('updating wt_kladr_objects from DOMA...')
     update_doma(cur, arch_path_dir + '/DOMA.DBF', types, up_types_set)

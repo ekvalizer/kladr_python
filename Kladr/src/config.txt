@@ -4,4 +4,4 @@ port: 5432
 Database login: postgres
 Database password: postgres
 Database name: kladr
-Types: с,пгт,погост,снт
+Types: с,пгт,погост,снт,ДОМ
